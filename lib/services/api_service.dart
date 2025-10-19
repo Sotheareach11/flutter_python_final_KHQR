@@ -7,6 +7,20 @@ class ApiService {
   static const String baseUrl = "http://10.0.2.2:8000/api/";
 
   // ---------------- AUTH ----------------
+  static Future<void> refreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refresh = prefs.getString('refresh_token');
+    final res = await http.post(
+      Uri.parse('${baseUrl}auth/token/refresh/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh': refresh}),
+    );
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      prefs.setString('access_token', data['access']);
+    }
+  }
+
   static Future<bool> login(String username, String password) async {
     final url = Uri.parse('${baseUrl}auth/login/');
     final res = await http.post(
@@ -280,16 +294,18 @@ class ApiService {
   static Future<Map<String, dynamic>> getUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
-    final url = Uri.parse('${baseUrl}auth/users/me/');
-    final res = await http.get(
-      url,
+
+    final response = await http.get(
+      Uri.parse('${baseUrl}auth/users/info/'),
       headers: {'Authorization': 'Bearer $token'},
     );
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+    // Step 3: Return normally if success
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
     } else {
-      return {};
+      print('Error ${response.statusCode}: ${response.body}');
+      throw Exception('Failed to fetch user info');
     }
   }
 
