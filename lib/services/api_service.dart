@@ -294,18 +294,42 @@ class ApiService {
   static Future<Map<String, dynamic>> getUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
+    final url = Uri.parse('${baseUrl}auth/users/info/');
 
-    final response = await http.get(
-      Uri.parse('${baseUrl}auth/users/info/'),
-      headers: {'Authorization': 'Bearer $token'},
+    var response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
     );
 
-    // Step 3: Return normally if success
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
+    } else if (response.statusCode == 401) {
+      await refreshToken();
+
+      // Retry once after refreshing
+      final newToken = prefs.getString('token');
+      if (newToken != null && newToken.isNotEmpty) {
+        response = await http.get(
+          url,
+          headers: {
+            'Authorization': 'Bearer $newToken',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      }
+
+      // If still unauthorized, log out
+      await logout();
+      throw Exception('Unauthorized');
     } else {
-      print('Error ${response.statusCode}: ${response.body}');
-      throw Exception('Failed to fetch user info');
+      throw Exception('Failed to load user info');
     }
   }
 

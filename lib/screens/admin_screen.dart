@@ -34,12 +34,19 @@ class _AdminScreenState extends State<AdminScreen>
 
   Future<void> fetchData() async {
     setState(() => isLoading = true);
-    await Future.wait([
-      if (widget.isAdmin) fetchUsers(),
-      fetchTasks(),
-      if (widget.isAdmin) fetchTeams(),
-    ]);
-    setState(() => isLoading = false);
+
+    try {
+      await Future.wait([
+        if (widget.isAdmin) fetchUsers(),
+        fetchTasks(),
+        if (widget.isAdmin) fetchTeams(),
+      ]);
+    } catch (e, stackTrace) {
+      debugPrint('Error in fetchData: $e');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> fetchUsers() async {
