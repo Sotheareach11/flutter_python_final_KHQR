@@ -44,46 +44,80 @@ class _AdminScreenState extends State<AdminScreen>
     } catch (e, stackTrace) {
       debugPrint('Error in fetchData: $e');
       debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load initial data')),
+        );
+      }
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> fetchUsers() async {
-    users = await ApiService.getAllUsers();
+    try {
+      users = await ApiService.getAllUsers();
+    } catch (e) {
+      debugPrint('Error fetching users: $e');
+      users = [];
+    }
   }
 
   Future<void> fetchTasks() async {
-    tasks = await ApiService.getAllTasks();
+    try {
+      tasks = await ApiService.getAllTasks();
+    } catch (e) {
+      debugPrint('Error fetching tasks: $e');
+      tasks = [];
+    }
   }
 
   Future<void> fetchTeams() async {
-    teams = await ApiService.getAllTeams();
+    try {
+      teams = await ApiService.getAllTeams();
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Error fetching teams: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to load teams')));
+      }
+      teams = [];
+    }
   }
 
   Future<void> refreshTasks() async {
     await fetchTasks();
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> refreshTeams() async {
     await fetchTeams();
-    setState(() {});
   }
 
   void toggleUserStatus(int id, bool isActive) async {
     setState(() => isLoading = true);
-    String message;
-    if (isActive) {
-      message = await ApiService.disableUser(id);
-    } else {
-      message = await ApiService.enableUser(id);
+    try {
+      final message = isActive
+          ? await ApiService.disableUser(id)
+          : await ApiService.enableUser(id);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+      await fetchUsers();
+    } catch (e) {
+      debugPrint('Error toggling user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error changing user status')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-    await fetchUsers();
-    setState(() => isLoading = false);
   }
 
   Future<void> addTask() async {
@@ -96,12 +130,19 @@ class _AdminScreenState extends State<AdminScreen>
     }
 
     setState(() => isAddingTask = true);
-    final msg = await ApiService.createTask(title);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-
-    titleCtrl.clear();
-    await refreshTasks();
-    setState(() => isAddingTask = false);
+    try {
+      final msg = await ApiService.createTask(title);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      titleCtrl.clear();
+      await refreshTasks();
+    } catch (e) {
+      debugPrint('Error adding task: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to add task')));
+    } finally {
+      if (mounted) setState(() => isAddingTask = false);
+    }
   }
 
   Future<void> addTeam() async {
@@ -114,18 +155,24 @@ class _AdminScreenState extends State<AdminScreen>
     }
 
     setState(() => isAddingTeam = true);
-    final msg = await ApiService.createTeam(name);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-
-    teamCtrl.clear();
-    await refreshTeams();
-    setState(() => isAddingTeam = false);
+    try {
+      final msg = await ApiService.createTeam(name);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      teamCtrl.clear();
+      await refreshTeams();
+    } catch (e) {
+      debugPrint('Error adding team: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to add team')));
+    } finally {
+      if (mounted) setState(() => isAddingTeam = false);
+    }
   }
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -452,36 +499,88 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   // --- Dialog to View Members ---
+  // --- Dialog to View Members (with Remove option) ---
   void _showMembersDialog(int teamId) async {
-    final members = await ApiService.getTeamMembers(teamId);
+    try {
+      final members = await ApiService.getTeamMembers(teamId);
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Team Members'),
-        content: members.isEmpty
-            ? const Text('No members found')
-            : SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: members.length,
-                  itemBuilder: (_, i) {
-                    final member = members[i];
-                    return ListTile(
-                      title: Text(member['username']),
-                      subtitle: Text(member['email']),
-                    );
-                  },
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Team Members'),
+          content: members.isEmpty
+              ? const Text('No members found')
+              : SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: members.length,
+                    itemBuilder: (_, i) {
+                      final member = members[i];
+                      return ListTile(
+                        title: Text(member['username']),
+                        subtitle: Text(member['email']),
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.remove_circle,
+                            color: Colors.red,
+                          ),
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (removeCtx) => AlertDialog(
+                                title: const Text('Confirm Remove'),
+                                content: Text(
+                                  'Remove ${member['username']} from this team?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(removeCtx, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(removeCtx, true),
+                                    child: const Text('Remove'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true) {
+                              final msg = await ApiService.removeMemberFromTeam(
+                                teamId,
+                                member['id'],
+                              );
+
+                              if (mounted) {
+                                Navigator.pop(ctx); // close main dialog
+                                ScaffoldMessenger.of(
+                                  context,
+                                ).showSnackBar(SnackBar(content: Text(msg)));
+                                await refreshTeams();
+                              }
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error fetching members: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to load members')));
+    }
   }
 }

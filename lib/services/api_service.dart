@@ -391,12 +391,46 @@ class ApiService {
   }
 
   static Future<List<dynamic>> getTeamMembers(int teamId) async {
-    final response = await http.get(
-      Uri.parse('${baseUrl}auth/teams/$teamId/members/'),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) throw Exception('No authentication token found');
+
+      final url = Uri.parse(
+        '${baseUrl}auth/teams/$teamId/members/',
+      ); // ✅ correct trailing slash
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token', // ✅ required
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print('🔍 GET: $url');
+      print('Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data;
+        } else if (data is Map && data.containsKey('members')) {
+          return data['members'];
+        } else {
+          throw Exception('Unexpected response format: $data');
+        }
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized: Invalid or expired token');
+      } else if (response.statusCode == 404) {
+        throw Exception('Team not found');
+      } else {
+        throw Exception(
+          'Failed to load members (status ${response.statusCode})',
+        );
+      }
+    } catch (e) {
+      print('❌ Error in getTeamMembers: $e');
       throw Exception('Failed to load members');
     }
   }
@@ -423,30 +457,123 @@ class ApiService {
     }
   }
 
+  static Future<String> removeMemberFromTeam(int teamId, int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) return 'No authentication token found';
+
+      final url = Uri.parse('${baseUrl}auth/teams/$teamId/remove_member/');
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'user_id': userId}),
+      );
+
+      print('Remove Member: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['message'] ?? 'Member removed successfully';
+      } else {
+        return 'Failed to remove member (${response.statusCode})';
+      }
+    } catch (e) {
+      print('Error removing member: $e');
+      return 'Error removing member: $e';
+    }
+  }
+
   static Future<List<dynamic>> getAllTeams() async {
-    final response = await http.get(Uri.parse('${baseUrl}auth/teams/'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) {
+        throw Exception('No authentication token found');
+      }
+
+      final url = Uri.parse('${baseUrl}auth/teams/'); // ✅ correct path
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token', // ✅ required
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print('🔍 GET: $url');
+      print('Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // ✅ handle both list and dict responses
+        if (data is List) {
+          return data;
+        } else if (data is Map && data.containsKey('results')) {
+          return data['results'];
+        } else if (data is Map && data.containsKey('teams')) {
+          return data['teams'];
+        } else {
+          throw Exception('Unexpected response format: $data');
+        }
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized: invalid or expired token');
+      } else {
+        throw Exception('Failed to load teams (status ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error in getAllTeams: $e');
       throw Exception('Failed to load teams');
     }
   }
 
   static Future<String> createTeam(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return 'No authentication token found';
+
     final response = await http.post(
       Uri.parse('${baseUrl}auth/teams/'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode({'name': name}),
     );
+
+    print('Create Team: ${response.statusCode} - ${response.body}');
+
     return response.statusCode == 201
         ? 'Team created successfully'
-        : 'Failed to create team';
+        : 'Failed to create team (${response.statusCode})';
   }
 
   static Future<String> deleteTeam(int id) async {
-    final response = await http.delete(Uri.parse('${baseUrl}auth/teams/$id/'));
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return 'No authentication token found';
+
+    final response = await http.delete(
+      Uri.parse('${baseUrl}auth/teams/$id/'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    print('Delete Team: ${response.statusCode} - ${response.body}');
+
     return response.statusCode == 204
-        ? 'Team deleted'
-        : 'Failed to delete team';
+        ? 'Team deleted successfully'
+        : 'Failed to delete team (${response.statusCode})';
   }
+
+  // static Future<String> deleteTeam(int id) async {
+  //   final response = await http.delete(Uri.parse('${baseUrl}auth/teams/$id/'));
+  //   return response.statusCode == 204
+  //       ? 'Team deleted'
+  //       : 'Failed to delete team';
+  // }
 }
