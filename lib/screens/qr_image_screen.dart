@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class KhqrImageScreen extends StatefulWidget {
-  const KhqrImageScreen({Key? key}) : super(key: key);
+  const KhqrImageScreen({super.key});
 
   @override
   State<KhqrImageScreen> createState() => _KhqrImageScreenState();

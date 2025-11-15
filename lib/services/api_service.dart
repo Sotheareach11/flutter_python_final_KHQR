@@ -6,6 +6,46 @@ class ApiService {
   // For Android Emulator
   static const String baseUrl = "http://10.0.2.2:8000/api/";
 
+  // Use emulator base URL — change to your server in production
+  static const String baseUrls = "http://10.0.2.2:8000/api/payments";
+
+  // ------------------------------
+  // 📌 1. Create Stripe Checkout Session
+  // ------------------------------
+  static Future<Map<String, dynamic>> createStripeCheckout({
+    required int userId,
+    required double amount,
+    String currency = "usd",
+  }) async {
+    final url = Uri.parse("$baseUrls/stripe/create-checkout/");
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "user_id": userId,
+        "amount": amount,
+        "currency": currency,
+      }),
+    );
+
+    return jsonDecode(response.body);
+  }
+
+  // ------------------------------
+  // 📌 2. Check Payment Status (Stripe)
+  // ------------------------------
+  static Future<Map<String, dynamic>> checkPaymentStripe({
+    required String sessionId,
+  }) async {
+    final url = Uri.parse(
+      "$baseUrls/check-payment-stripe/?session_id=$sessionId",
+    );
+
+    final res = await http.get(url);
+    return jsonDecode(res.body);
+  }
+
   // ---------------- AUTH ----------------
   static Future<void> refreshToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -183,10 +223,11 @@ class ApiService {
         }
 
         // fallback if backend returns plain text or unknown structure
-        if (msg is String)
+        if (msg is String) {
           return msg;
-        else
+        } else {
           return "Task created successfully."; // default fallback
+        }
       } else {
         // Handle error messages
         if (msg is Map<String, dynamic>) {
@@ -575,5 +616,22 @@ class ApiService {
   //   return response.statusCode == 204
   //       ? 'Team deleted'
   //       : 'Failed to delete team';
+  // }
+
+  // Future<void> handleStripePayment() async {
+  //   final response = await http.post(
+  //     Uri.parse("http://10.0.2.2:8000/api/payments/stripe/create-checkout/"),
+  //     headers: {"Content-Type": "application/json"},
+  //     body: jsonEncode({"user_id": userId, "amount": 10.0}),
+  //   );
+
+  //   final data = jsonDecode(response.body);
+
+  //   if (data["success"] == true) {
+  //     final url = Uri.parse(data["checkout_url"]);
+  //     await launchUrl(url, mode: LaunchMode.externalApplication);
+  //   } else {
+  //     print("Stripe error: ${data['error']}");
+  //   }
   // }
 }

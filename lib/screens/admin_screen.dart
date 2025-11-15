@@ -457,7 +457,7 @@ class _AdminScreenState extends State<AdminScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Add Member to Team'),
         content: DropdownButtonFormField<int>(
-          value: selectedUserId,
+          initialValue: selectedUserId,
           hint: const Text('Select a user'),
           items: users.map<DropdownMenuItem<int>>((user) {
             return DropdownMenuItem<int>(
